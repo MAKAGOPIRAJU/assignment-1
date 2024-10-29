@@ -1,0 +1,181 @@
+// Configures the build script dependencies and repositories
+buildscript {
+    // Defines the Kotlin version used by the Kotlin Gradle plugin
+    ext.kotlin_version = '1.6.10'
+
+    repositories {
+        // Central repository for Maven artifacts
+        mavenCentral()
+        // Additional repository to fetch Gradle plugins
+        maven { url = uri('https://plugins.gradle.org/m2/') }
+    }
+
+    dependencies {
+        // Adds the Kotlin Gradle plugin, allowing the project to build Kotlin code
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version")
+    }
+}
+
+// Applies various plugins necessary for project configuration
+plugins {
+    // Java plugin for building Java-based applications
+    id 'java'
+    // Kotlin plugin for JVM-based Kotlin projects
+    id 'org.jetbrains.kotlin.jvm' version '1.6.10'
+    // Kotlin Annotation Processing Tool (KAPT) plugin for processing annotations (Dagger, etc.)
+    id 'org.jetbrains.kotlin.kapt' version '1.6.10'
+    // Jacoco plugin for code coverage reporting
+    id 'jacoco'
+}
+
+// Group and version details for the project
+group = 'com.fretron'
+version = '1.0-SNAPSHOT'
+
+// Sets the project's description (can be customized or left empty)
+description = """"""
+
+// Specifies Java version compatibility for the source and target code
+sourceCompatibility = 11
+targetCompatibility = 11
+
+// Configures encoding options for Java compilation
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+// Kotlin compilation configuration
+compileKotlin {
+    kotlinOptions {
+        // Targets Java 11 for Kotlin code compilation
+        jvmTarget = "11"
+    }
+}
+
+// Kotlin test compilation configuration
+compileTestKotlin {
+    kotlinOptions {
+        // Targets Java 11 for test Kotlin code compilation
+        jvmTarget = "11"
+    }
+}
+
+// External library versions are set here for reuse in dependencies
+ext {
+    jerseyVersion = '2.19'
+    jettyVersion = '9.2.12.v20150709'
+    kafkaVersion = '3.3.1'
+    confluentVersion = '4.0.0'
+    daggerVersion="2.16"
+    jacocoVersion = '0.8.1'
+}
+
+// Repositories to resolve project dependencies
+repositories {
+    // Maven repository for Confluent Kafka dependencies
+    maven { url "https://packages.confluent.io/maven/" }
+    // Standard Maven repository
+    maven { url "https://repo.maven.apache.org/maven2" }
+    // Central repository for Maven artifacts
+    mavenCentral()
+}
+
+// Dependencies required by the project
+dependencies {
+
+    // OpenTelemetry dependencies for observability and tracing
+    implementation("io.opentelemetry:opentelemetry-api:1.32.0")
+    implementation("io.opentelemetry:opentelemetry-sdk:1.32.0")
+    implementation("io.opentelemetry:opentelemetry-sdk-metrics:1.32.0")
+    implementation("io.opentelemetry:opentelemetry-exporter-logging:1.32.0")
+    implementation("io.opentelemetry.semconv:opentelemetry-semconv:1.23.1-alpha")
+    implementation("io.opentelemetry:opentelemetry-sdk-extension-autoconfigure:1.32.0")
+    implementation("io.opentelemetry:opentelemetry-sdk-extension-autoconfigure-spi:1.32.0")
+    implementation("com.google.cloud.opentelemetry:exporter-trace:0.20.0")
+
+    // Redis and MongoDB dependencies
+    api "redis.clients:jedis:2.9.0"
+    api 'org.mongodb:mongodb-driver-sync:4.7.0'
+
+    // Apache Kafka and Confluent Kafka libraries for message streaming
+    api  "org.apache.kafka:kafka-clients:$kafkaVersion"
+    api "io.confluent:kafka-avro-serializer:$confluentVersion"
+    api  "org.apache.kafka:kafka-streams:$kafkaVersion"
+    api "io.confluent:kafka-schema-registry:$confluentVersion"
+
+    // JSON processing libraries
+    api "org.json:json:20170516"
+    api group: 'com.google.code.gson', name: 'gson', version: '2.8.6'
+
+    // Jersey and Jetty libraries for handling HTTP and Servlet functionality
+    api group: 'org.glassfish.jersey.containers', name: 'jersey-container-servlet-core', version:'2.19'
+    api group: 'org.eclipse.jetty', name: 'jetty-servlet', version:'9.2.12.v20150709'
+
+    // Jackson libraries for JSON serialization/deserialization
+    api group: 'com.fasterxml.jackson.core', name: 'jackson-core', version:'2.5.3'
+    api group: 'com.fasterxml.jackson.core', name: 'jackson-annotations', version:'2.5.3'
+    api group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version:'2.5.3'
+
+    // Miscellaneous dependencies for image processing, CSV parsing, etc.
+    api group: 'org.imgscalr', name: 'imgscalr-lib', version: '4.2'
+    api "com.opencsv:opencsv:4.0"
+    api "org.simpleflatmapper:sfm-csv:6.0.3"
+
+    // JAXB (Java Architecture for XML Binding) dependencies for Java 11 support
+    api group: 'javax.xml.bind', name: 'jaxb-api', version: '2.3.0'
+    api "javax.activation:javax.activation-api:1.2.0"
+    api('org.glassfish.jaxb:jaxb-runtime:2.3.0')
+
+    // Dependency injection using Dagger
+    api "com.google.dagger:dagger:$daggerVersion"
+    kapt "com.google.dagger:dagger-compiler:$daggerVersion"
+
+    // Testing dependencies for unit and integration tests
+    testImplementation "org.assertj:assertj-core:3.3.0"
+    testImplementation group: 'org.apache.kafka', name: 'kafka-streams-test-utils', version: kafkaVersion
+    testImplementation "org.json:json:20170516"
+    testImplementation group: 'com.nhaarman', name: 'mockito-kotlin', version: '1.6.0'
+}
+
+// Task to create a "fat" (standalone) JAR file that includes all dependencies
+task fatJar(type: Jar) {
+    manifest {
+        // Specifies metadata for the JAR file (including the main class to run the application)
+        attributes 'Implementation-Title': 'VehicleManager',
+        'Implementation-Version': archiveVersion,
+        'Main-Class': 'com.fretron.ApplicationKt'
+    }
+    // Customizes the name of the generated JAR file
+    archiveBaseName.set(project.name + '-all')
+    // Includes runtime dependencies inside the JAR file
+    from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
+    with jar
+            // Excludes unnecessary metadata files from the final JAR
+            exclude ('META-INF/*.RSA', 'META-INF/*.SF','META-INF/*.DSA')
+    duplicatesStrategy = 'INCLUDE'
+}
+
+// Configuration for Jacoco (code coverage tool)
+jacoco {
+    toolVersion = jacocoVersion
+    // Directory where Jacoco reports will be stored
+    reportsDirectory = layout.buildDirectory.dir("jacoco-report")
+}
+
+// Configures Jacoco test report generation
+jacocoTestReport {
+    reports {
+        // Enables XML report generation for Jacoco
+        xml.required = true
+        // Disables CSV report generation
+        csv.required = false
+        // Enables HTML report generation for Jacoco
+        html.required = true
+    }
+}
+
+// Configuration for running tests
+test {
+    // Specifies that test failures will not stop the build
+    ignoreFailures = true
+}

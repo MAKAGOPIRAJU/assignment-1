@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config>
+    <entry key="server.host">localhost</entry>
+    <entry key="server.port">8080</entry>
+    <entry key="db.name">schoolManagement</entry>
+    <entry key="db.connection.string">mongodb://127.0.0.1:27017</entry>
+    <entry key="collection.name">students</entry>
+</config>
