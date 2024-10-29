@@ -40,4 +40,28 @@ class ConfigModule {
         return AppContext.getProp(STUDENT_COLLECTION_NAME_KEY).toString()
     }
 
+    @Provides
+    @Named(KAFKA_BOOTSTRAP_SERVERS_URL)
+    fun provideKafkaBootstrapServers(): String {
+        return AppContext.getProp(KAFKA_BOOTSTRAP_SERVERS_URL).toString()
+    }
+
+    @Provides
+    @Named(KAFKA_USER_NAME)
+    fun provideKafkaUsername(): String {
+        return AppContext.getProp(KAFKA_USER_NAME).toString()
+    }
+
+    @Provides
+    @Named(KAFKA_PASSWORD)
+    fun provideKafkaPassword(): String {
+        return AppContext.getProp(KAFKA_PASSWORD).toString()
+    }
+
+    @Provides
+    @Named(KAFKA_TOPIC_NAME)
+    fun provideKafkaTopic(): String {
+        return AppContext.getProp(KAFKA_TOPIC_NAME).toString()
+    }
+
 }

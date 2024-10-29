@@ -15,7 +15,7 @@ import schoolManagement.app.kafka.ActivityLogProducer;
 
 class StudentRepository @Inject constructor(private val database: MongoDatabase,
                                             @Named(STUDENT_COLLECTION_NAME_KEY) collectionName: String,
-private val activityLogProducer: ActivityLogProducer){
+                                            private val activityLogProducer: ActivityLogProducer){
 
     private val collection: MongoCollection<Document> = database.getCollection(collectionName)
 

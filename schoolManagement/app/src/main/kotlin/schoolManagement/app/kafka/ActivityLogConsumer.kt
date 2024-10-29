@@ -1,6 +1,7 @@
 package schoolManagement.app.kafka
 
 import com.google.gson.Gson
+import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.mongodb.client.MongoDatabase
 import org.apache.kafka.clients.consumer.ConsumerConfig
@@ -11,26 +12,59 @@ import java.time.Duration
 import java.util.Properties
 import java.util.logging.Logger
 import javax.inject.Inject
+import javax.inject.Named
 import kotlin.concurrent.thread
 
-class ActivityLogConsumer @Inject constructor(private val database: MongoDatabase) {
+class ActivityLogConsumer @Inject constructor(
+    private val database: MongoDatabase,
+    @Named("kafka.bootstrap.servers") private val bootstrapServers: String,
+    @Named("kafka.username") private val username: String,
+    @Named("kafka.password") private val password: String,
+    @Named("kafka.topic") private val topic: String
+) {
 
     private val consumer: KafkaConsumer<String, String>
-
     private val logger = Logger.getLogger(ActivityLogConsumer::class.java.name)
 
     init {
-        val props = Properties()
-        props[ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG] = "pkc-12576z.us-west2.gcp.confluent.cloud:9092"
-        props[ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG] = StringDeserializer::class.java.name
-        props[ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG] = StringDeserializer::class.java.name
-        props[ConsumerConfig.GROUP_ID_CONFIG] = "activityLogConsumerGroup"
-        props["sasl.jaas.config"] = "org.apache.kafka.common.security.plain.PlainLoginModule required username='5G25HLVZ5P7DWLZ6' password='ZM2F1QqZuUHcor6gY681ipf9vG2aZyOU6bHr69RkC9OC0EkEnn/bu45mbS7NHgIm';"
-        props["security.protocol"] = "SASL_SSL"
-        props["sasl.mechanism"] = "PLAIN"
+        val props = Properties().apply {
+            put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
+            put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer::class.java.name)
+            put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer::class.java.name)
+            put(ConsumerConfig.GROUP_ID_CONFIG, "activityLogConsumerGroup")
+            put("sasl.jaas.config", "org.apache.kafka.common.security.plain.PlainLoginModule required username='$username' password='$password';")
+            put("security.protocol", "SASL_SSL")
+            put("sasl.mechanism", "PLAIN")
+        }
 
         consumer = KafkaConsumer(props)
-        consumer.subscribe(listOf("activityLog"))
+        consumer.subscribe(listOf(topic))
+    }
+
+    private fun jsonToDocument(jsonObject: JsonObject): Document {
+        val document = Document()
+        jsonObject.entrySet().forEach { (key, value) ->
+            document[key] = convertJsonElement(value)
+        }
+        return document
+    }
+
+    private fun convertJsonElement(element: JsonElement): Any? {
+        return when {
+            element.isJsonNull -> null
+            element.isJsonPrimitive -> {
+                val primitive = element.asJsonPrimitive
+                when {
+                    primitive.isBoolean -> primitive.asBoolean
+                    primitive.isNumber -> primitive.asNumber
+                    primitive.isString -> primitive.asString
+                    else -> primitive.asString
+                }
+            }
+            element.isJsonObject -> jsonToDocument(element.asJsonObject)
+            element.isJsonArray -> element.asJsonArray.map { convertJsonElement(it) }
+            else -> element.toString()
+        }
     }
 
     fun startConsuming() {
@@ -38,21 +72,17 @@ class ActivityLogConsumer @Inject constructor(private val database: MongoDatabas
             while (true) {
                 val records = consumer.poll(Duration.ofMillis(100))
                 records.forEach { record ->
-                    // Parse the log message JSON string back into a JsonObject
                     val gson = Gson()
                     val logActivityJson = gson.fromJson(record.value(), JsonObject::class.java)
 
-                    // Create a Document from the JsonObject
-                    val logDocument = Document()
-                    logActivityJson.entrySet().forEach { entry ->
-                        logDocument[entry.key] = entry.value
-                    }
+                    // Convert JsonObject to Document
+                    val logDocument = jsonToDocument(logActivityJson)
 
-                    // Store the document in the activityLogs collection
+                    // Insert into the activityLogs collection
                     val logCollection = database.getCollection("activityLogs")
                     logCollection.insertOne(logDocument)
 
-                    logger.info("The activity log is consumed and added to the database");
+                    logger.info("The activity log is consumed and added to the database.")
                 }
             }
         }
