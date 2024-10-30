@@ -14,7 +14,6 @@ interface AppComponent {
 
      fun server(): HttpServer
 
-
-    fun activityLogConsumer(): ActivityLogConsumer
+    fun getActivityLogConsumer(): ActivityLogConsumer
 
 }

@@ -63,22 +63,4 @@ object AppContext {
         }
     }
 
-    /**
-     * Adds system environment variables to the config. This allows system-defined variables
-     * to be accessible as part of the configuration.
-     */
-    private fun setSystemEnvironmentVariables(config: Config) {
-        // Gets all environment variables from the system
-        val envVariables = System.getenv()
-
-        // Adds each environment variable to the config
-        envVariables.forEach { (key, value) ->
-            config.put(key, value)
-        }
-    }
-
-    // Retrieves the environment from the configuration, defaulting to "test" if not specified
-    fun getEnvironment(): String {
-        return config.getString("environment") ?: ENVIRONMENT
-    }
 }

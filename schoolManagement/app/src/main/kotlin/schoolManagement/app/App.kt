@@ -19,7 +19,9 @@ fun main(args: Array<String>) {
     val server = appComponent.server();
 
     // kafka-consumer
-    val activityLogConsumer = appComponent.activityLogConsumer().startConsuming();
+    val activityLogConsumer = appComponent.getActivityLogConsumer()
+
+    activityLogConsumer.startConsuming()
 
     server.start()
 }

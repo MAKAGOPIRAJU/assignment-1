@@ -5,6 +5,7 @@ import dagger.Module
 import dagger.Provides
 import schoolManagement.app.kafka.ActivityLogConsumer
 import schoolManagement.app.kafka.ActivityLogProducer
+import java.util.*
 import javax.inject.Named
 import javax.inject.Singleton
 
@@ -26,6 +27,7 @@ class KafkaModule {
     @Provides
     @Singleton
     fun provideActivityLogProducer(
+
         @Named("kafka.bootstrap.servers") bootstrapServers: String,
         @Named("kafka.username") username: String,
         @Named("kafka.password") password: String,

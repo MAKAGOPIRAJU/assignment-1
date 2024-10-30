@@ -20,7 +20,8 @@ class ActivityLogConsumer @Inject constructor(
     @Named("kafka.bootstrap.servers") private val bootstrapServers: String,
     @Named("kafka.username") private val username: String,
     @Named("kafka.password") private val password: String,
-    @Named("kafka.topic") private val topic: String
+    @Named("kafka.topic") private val topic: String,
+
 ) {
 
     private val consumer: KafkaConsumer<String, String>
@@ -68,18 +69,23 @@ class ActivityLogConsumer @Inject constructor(
     }
 
     fun startConsuming() {
+        // Start a new thread to handle the consuming process asynchronously
         thread {
             while (true) {
                 val records = consumer.poll(Duration.ofMillis(100))
+
+                // Iterate over each record (message) retrieved from the poll
                 records.forEach { record ->
                     val gson = Gson()
+
+                    // Deserialize the record's value (JSON string) to a JsonObject
                     val logActivityJson = gson.fromJson(record.value(), JsonObject::class.java)
 
-                    // Convert JsonObject to Document
+                    // Convert the JsonObject to a MongoDB Document for insertion
                     val logDocument = jsonToDocument(logActivityJson)
 
-                    // Insert into the activityLogs collection
                     val logCollection = database.getCollection("activityLogs")
+
                     logCollection.insertOne(logDocument)
 
                     logger.info("The activity log is consumed and added to the database.")
@@ -87,4 +93,5 @@ class ActivityLogConsumer @Inject constructor(
             }
         }
     }
+
 }
