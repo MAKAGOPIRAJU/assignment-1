@@ -13,6 +13,7 @@ class Config {
     // Method to load properties from an XML file
     fun load(filePath: String) {
         try {
+
             val factory = DocumentBuilderFactory.newInstance()
             val builder = factory.newDocumentBuilder()
             val document: Document = builder.parse(File(filePath))

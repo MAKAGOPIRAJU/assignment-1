@@ -28,7 +28,9 @@ class ActivityLogConsumer @Inject constructor(
     private val logger = Logger.getLogger(ActivityLogConsumer::class.java.name)
 
     init {
+
         val props = Properties().apply {
+
             put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
             put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer::class.java.name)
             put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer::class.java.name)
@@ -51,6 +53,7 @@ class ActivityLogConsumer @Inject constructor(
     }
 
     private fun convertJsonElement(element: JsonElement): Any? {
+
         return when {
             element.isJsonNull -> null
             element.isJsonPrimitive -> {
