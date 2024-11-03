@@ -1,4 +1,4 @@
-package schoolManagement.app.Config
+package activitylogsmanagement.app.Config;
 
 import org.w3c.dom.Document
 import javax.xml.parsers.DocumentBuilderFactory

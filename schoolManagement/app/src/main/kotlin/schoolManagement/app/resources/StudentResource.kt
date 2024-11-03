@@ -44,7 +44,7 @@ class StudentResource @Inject constructor(var studentRepository: StudentReposito
   }
 
   @GET
-  @Path("{id}")
+  @Path("/{id}")
   @Produces(MediaType.APPLICATION_JSON)
   fun getStudent(@PathParam("id") id: String): Response {
     val student = studentRepository.getStudent(id) ?: return Response.status(Response.Status.NOT_FOUND).build()
@@ -52,7 +52,7 @@ class StudentResource @Inject constructor(var studentRepository: StudentReposito
   }
 
   @DELETE
-  @Path("{id}")
+  @Path("/{id}")
   fun deleteStudent(@PathParam("id") id: String): Response {
     val deleted = studentRepository.deleteStudent(id)
 
@@ -61,6 +61,13 @@ class StudentResource @Inject constructor(var studentRepository: StudentReposito
     } else {
       Response.status(Response.Status.NOT_FOUND).build()
     }
+  }
+
+  @PUT
+  @Path("/{id}")
+  fun updateStudent(@PathParam("id") id: String,updateStuddent:Student) :Student? {
+
+    return studentRepository.updateStudent(id,updateStuddent);
   }
 
 
