@@ -1,5 +1,6 @@
 package activitylogsmanagement.app.di
 
+import activitylogsmanagement.app.*
 import activitylogsmanagement.app.consumer.ActivityLogConsumer;
 import com.mongodb.client.MongoDatabase
 import dagger.Module
@@ -14,10 +15,11 @@ class KafkaModule {
     @Singleton
     fun provideActivityLogConsumer(
         database: MongoDatabase,
-        @Named("kafka.bootstrap.servers") bootstrapServers: String,
-        @Named("kafka.username")  username: String,
-        @Named("kafka.password") password: String,
-        @Named("kafka.topic")  topic: String): ActivityLogConsumer {
-        return ActivityLogConsumer(database ,bootstrapServers, username,password,topic)
+        @Named(KAFKA_BOOTSTRAP_SERVERS_URL) bootstrapServers: String,
+        @Named(KAFKA_USER_NAME)  username: String,
+        @Named(KAFKA_PASSWORD) password: String,
+        @Named(KAFKA_TOPIC_NAME)  topic: String,
+        @Named(ACTIVITY_LOG_COLL_NAME) collection: String): ActivityLogConsumer {
+        return ActivityLogConsumer(database ,bootstrapServers, username,password,topic,collection)
     }
 }

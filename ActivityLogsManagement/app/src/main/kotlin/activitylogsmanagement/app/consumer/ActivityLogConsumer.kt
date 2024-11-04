@@ -1,13 +1,18 @@
-package activitylogsmanagement.app.consumer;
+package activitylogsmanagement.app.consumer
 
-import com.google.gson.Gson
-import com.google.gson.JsonElement
-import com.google.gson.JsonObject
+import activitylogsmanagement.app.*
+import activitylogsmanagement.app.Model.Student
+import com.google.gson.*
+import com.mongodb.client.MongoCollection
 import com.mongodb.client.MongoDatabase
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.bson.Document
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
 import java.time.Duration
 import java.util.Properties
 import java.util.logging.Logger
@@ -17,14 +22,16 @@ import kotlin.concurrent.thread
 
 class ActivityLogConsumer @Inject constructor(
     private val database: MongoDatabase,
-    @Named("kafka.bootstrap.servers") private val bootstrapServers: String,
-    @Named("kafka.username") private val username: String,
-    @Named("kafka.password") private val password: String,
-    @Named("kafka.topic") private val topic: String,
+    @Named(KAFKA_BOOTSTRAP_SERVERS_URL) private val bootstrapServers: String,
+    @Named(KAFKA_USER_NAME) private val username: String,
+    @Named(KAFKA_PASSWORD) private val password: String,
+    @Named(KAFKA_TOPIC_NAME) private val topic: String,
+    @Named(ACTIVITY_LOG_COLL_NAME) private val collection: String
 ) {
 
     private val consumer: KafkaConsumer<String, String>
     private val logger = Logger.getLogger(ActivityLogConsumer::class.java.name)
+    private val logCollection: MongoCollection<Document> = database.getCollection(collection)
 
     init {
         val props = Properties().apply {
@@ -45,75 +52,97 @@ class ActivityLogConsumer @Inject constructor(
         thread {
             while (true) {
                 val records = consumer.poll(Duration.ofMillis(100))
-
                 records.forEach { record ->
-                    val gson = Gson()
-                    val logActivityJson = gson.fromJson(record.value(), JsonObject::class.java)
-                    processLog(logActivityJson)
+                    val rawJson = record.value()
+                    try {
+                        // Use JsonParser to create a lenient reader
+                        val logActivityJson = JsonParser.parseString(rawJson)
+                        processLog(logActivityJson.asJsonObject)
+                    } catch (e: JsonSyntaxException) {
+                        logger.severe("Failed to parse JSON: $rawJson")
+                        logger.severe("Exception: ${e.message}")
+                    }
                 }
             }
         }
     }
 
     private fun processLog(logActivityJson: JsonObject) {
-        val logCollection = database.getCollection("activityLogs")
+        val resourceId = logActivityJson.get("_id")?.asString ?: return
+        val existingLog = logCollection.find(Document("resourceId", resourceId)).first()
 
-        // Check if _id is a direct string instead of a nested JSON object
-        val resourceId = if (logActivityJson.get("_id")?.isJsonPrimitive == true) {
-            logActivityJson.get("_id")?.asString
+        if (existingLog == null) {
+            createLogEntry(logActivityJson, resourceId)
         } else {
-            logActivityJson.get("_id")?.asJsonObject?.get("\$oid")?.asString
-        } ?: ""
+            updateLogEntry(logActivityJson, existingLog, resourceId)
+        }
+    }
 
-        if (resourceId.isNotEmpty()) {
-            val existingLog = logCollection.find(Document("resourceId", resourceId)).first()
+    private fun createLogEntry(logActivityJson: JsonObject, resourceId: String) {
+        val resourceType = if (logActivityJson.has("course")) "Student" else "Teacher"
+        val description = "Created a new $resourceType: ${logActivityJson.toString()}"
 
-            // Determine if this is a new entry based on the existence of resourceId in the collection
-            if (existingLog == null) {
-                // Check for Student or Teacher based on the presence of the "subject" field
-                val resourceType = if (logActivityJson.has("subject")) "Teacher" else "Student"
-                val description = "Created a new $resourceType: $logActivityJson"
+        val logDocument = Document().apply {
+            put("resourceId", resourceId)
+            put("description", description)
+            put("changes", null)
+            put("uuid", "log-uuid-${System.currentTimeMillis()}") // Generate unique UUID
+            put("revision", 0)
+            put("time", System.currentTimeMillis()) // Current time in milliseconds
+            put("resourceType", resourceType)
+        }
 
-                val logDocument = Document().apply {
-                    put("resourceId", resourceId)
-                    put("description", description)
-                    put("changes", null)
-                    put("resourceType", resourceType)
+        logCollection.insertOne(logDocument)
+        logger.info("Created new $resourceType log: $description")
+    }
+
+    private fun updateLogEntry(logActivityJson: JsonObject, existingLog: Document, resourceId: String) {
+        val changesArray = existingLog.getList("changes", Document::class.java) ?: mutableListOf() // Retrieve existing changes
+        val descriptionParts = mutableListOf<String>()
+
+        // Fetch the current `student` object and `previousStudent` object from logActivityJson
+        val studentJson = logActivityJson.getAsJsonObject("student")
+        val previousStudentJson = logActivityJson.getAsJsonObject("previousStudent")
+
+        // Retrieve the current revision from the existing log and increment it
+        val currentRevision = existingLog.getInteger("revision", 0)
+        val newRevision = currentRevision + 1
+
+        // Use entrySet() to iterate over the properties in `student`
+        studentJson.entrySet().forEach { entry ->
+            val fieldName = entry.key
+            val currentValue = entry.value
+
+            // Get the last value from `previousStudent`
+            val lastValue = previousStudentJson?.get(fieldName)?.asString
+
+            // Compare last value with current value
+            if (lastValue != currentValue.toString()) {
+                // Record the new change details in a Document
+                val newChange = Document().apply {
+                    put("fieldName", fieldName)
+                    put("lastValue", lastValue ?: "null")  // Use "null" if lastValue is null
+                    put("currentValue", currentValue.toString())
                 }
-
-                logCollection.insertOne(logDocument)
-                logger.info("Created new $resourceType log: $description")
-            } else {
-                // Existing entry (update case)
-                val changes = logActivityJson.getAsJsonArray("changes")
-                val description = generateUpdateDescription(changes, resourceId)
-                val resourceType = existingLog.getString("resourceType") // Assume existing resourceType
-
-                val logDocument = Document().apply {
-                    put("resourceId", resourceId)
-                    put("description", description)
-                    put("changes", changes)
-                    put("resourceType", resourceType)
-                }
-
-                logCollection.insertOne(logDocument)
-                logger.info("Updated $resourceType log: $description")
+                changesArray.add(newChange) // Add new change to the existing changes array
+                descriptionParts.add("$fieldName from $lastValue to $currentValue")
             }
         }
+
+        // Build the description
+        val description = "Updated record: id=$resourceId, " + descriptionParts.joinToString(", ")
+
+        // Update the existing log document in the collection
+        val updateQuery = Document("\$set", Document("changes", changesArray)
+            .append("description", description)
+            .append("revision", newRevision)) // Set the new revision value
+
+        logCollection.updateOne(Document("resourceId", resourceId), updateQuery)
+
+        logger.info("Updated log: $description")
     }
 
 
-    private fun generateUpdateDescription(changes: JsonElement, resourceId: String): String {
-        val descriptions = mutableListOf<String>()
 
-        for (change in changes.asJsonArray) {
-            val lastValue = change.asJsonObject.get("lastValue")
-            val fieldName = change.asJsonObject.get("fieldName").asString
-            val currentValue = change.asJsonObject.get("currentValue")
 
-            descriptions.add("$fieldName from ${lastValue.toString()} to ${currentValue.toString()}")
-        }
-
-        return "Updated record: id=$resourceId, " + descriptions.joinToString(", ")
-    }
 }

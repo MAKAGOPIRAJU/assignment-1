@@ -1,6 +1,7 @@
 package schoolManagement.app.repository
 
 import com.google.gson.Gson
+import com.google.gson.JsonObject
 import com.mongodb.client.MongoDatabase
 import com.mongodb.client.MongoCollection
 import com.mongodb.client.model.Filters
@@ -109,8 +110,16 @@ class StudentRepository @Inject constructor(private val database: MongoDatabase,
 
     fun updateStudent(id: String, updatedStudent: Student): Student? {
         return try {
+            println("Update student initialized")
 
-            println("Update student intialized")
+            // Convert String ID to ObjectId for MongoDB query
+            val objectId = try {
+                ObjectId(id)
+            } catch (e: IllegalArgumentException) {
+                logger.severe("Invalid ID format: $id")
+                return null
+            }
+
             // Fetch the existing student with exception handling
             val existingStudent = try {
                 getStudent(id) ?: return null
@@ -118,6 +127,8 @@ class StudentRepository @Inject constructor(private val database: MongoDatabase,
                 logger.severe("Error fetching student with ID $id: ${e.message}")
                 throw RuntimeException("An error occurred while fetching the student. Please try again later.")
             }
+
+            val previousStudent: Student? = getStudent(id)
 
             // Update fields only if they are provided in the request
             updatedStudent.name?.let { existingStudent.name = it }
@@ -127,7 +138,7 @@ class StudentRepository @Inject constructor(private val database: MongoDatabase,
 
             // Update the student in the database
             val updateResult = collection.updateOne(
-                Filters.eq("id", id), // Filter to find the document by ID
+                Filters.eq("_id", objectId), // Use ObjectId instead of String
                 Updates.combine(
                     Updates.set("name", existingStudent.name),
                     Updates.set("age", existingStudent.age),
@@ -136,26 +147,48 @@ class StudentRepository @Inject constructor(private val database: MongoDatabase,
                 )
             )
 
+            // Send the updated student JSON to Kafka
+            try {
+                val studentJson = updateStudentWithResourceId(id, updatedStudent, previousStudent)
+                activityLogProducer.sendLog(studentJson)
+                logger.info("Updated student with ID $id sent to Kafka: $studentJson")
+            } catch (e: Exception) {
+                logger.severe("Error sending updated student to Kafka: ${e.message}")
+            }
 
-                // Convert updated student object to JSON
-                val gson = Gson()
-                val studentJson = gson.toJson(existingStudent)
-
-                // Send the updated student JSON to Kafka
-                try {
-                    activityLogProducer.sendLog(studentJson) // Sending as a string
-                    logger.info("Updated student with ID $id sent to Kafka: $studentJson")
-                } catch (e: Exception) {
-                    logger.severe("Error sending updated student to Kafka: ${e.message}")
-                }
-
-                existingStudent // Return the updated student object
+            existingStudent // Return the updated student object
 
         } catch (e: Exception) {
-            // Log the exception (consider using a logging framework)
             logger.severe("Error updating student with ID $id: ${e.message}")
             throw RuntimeException("An error occurred while updating the student. Please try again later.")
         }
+    }
+
+
+    fun updateStudentWithResourceId(resourceId: String, updateStudent: Student, previousStudent: Student?): String {
+
+        val gson = Gson()
+
+        // Convert the student object to JSON
+        val studentJson = gson.toJson(updateStudent)
+
+        // Create a JsonObject to hold the combined data
+        val resultJson = JsonObject().apply {
+            // Add the updated student JSON
+            this.add("student", gson.fromJson(studentJson, JsonObject::class.java))
+            // Add the resourceId
+            this.addProperty("_id", resourceId)
+
+            // If previousStudent is not null, add it to the result JSON as "previousStudent"
+            previousStudent?.let {
+                val previousStudentJson = gson.toJson(it)
+                this.add("previousStudent", gson.fromJson(previousStudentJson, JsonObject::class.java))
+            }
+        }
+
+        println(resultJson)
+        // Return the resulting JSON as a string
+        return gson.toJson(resultJson)
     }
 
 }

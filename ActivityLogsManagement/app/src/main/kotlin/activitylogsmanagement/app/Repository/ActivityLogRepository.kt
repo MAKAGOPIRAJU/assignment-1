@@ -36,31 +36,6 @@ class ActivityLogRepository @Inject constructor(
         collection.insertOne(activityLog_document);
     }
 
-//    fun fetchStudentById(studentId: String): Student? {
-//
-//         val httpClient: HttpClient = HttpClient.newBuilder().build()
-//         val schoolManagementBaseUrl = "http://localhost:8080/student"
-//
-//        val request = HttpRequest.newBuilder()
-//            .uri(URI.create("$schoolManagementBaseUrl/$studentId"))
-//            .GET()
-//            .build()
-//
-//        return try {
-//            val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
-//
-//            if (response.statusCode() == HttpURLConnection.HTTP_OK) {
-//                // Parse JSON response to Student object
-//                Gson().fromJson(response.body(), Student::class.java)
-//            } else {
-//                null
-//            }
-//        } catch (e: Exception) {
-//            e.printStackTrace()
-//            null
-//        }
-//    }
-
     fun generateActivityLog(updatedStudent: Student, originalStudent: Student) : Document{
 
         val resourceId = "student-uuid-${UUID.randomUUID()}"
@@ -123,7 +98,6 @@ class ActivityLogRepository @Inject constructor(
             .append("time", currentTime)
             .append("resourceType", "Student")
 
-        // Insert the document into the collection
         return activityLogDocument;
     }
 }

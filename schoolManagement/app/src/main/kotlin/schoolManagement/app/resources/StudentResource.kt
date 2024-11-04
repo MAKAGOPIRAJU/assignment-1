@@ -65,6 +65,7 @@ class StudentResource @Inject constructor(var studentRepository: StudentReposito
 
   @PUT
   @Path("/{id}")
+  @Produces(MediaType.APPLICATION_JSON)
   fun updateStudent(@PathParam("id") id: String,updateStuddent:Student) :Student? {
 
     return studentRepository.updateStudent(id,updateStuddent);
